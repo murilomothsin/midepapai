@@ -1,11 +1,11 @@
 require 'socket'
 require 'yaml'
+require 'pry'
 
 options = YAML.load_file('midepapai.yml')
-addr = options[:address] || "localhost"
-port = options[:port] || "2000"
-
-root_files = options[:location] || "./"
+addr = options["address"] || "localhost"
+port = options["port"] || "2000"
+root_files = options["location"] || "./"
 
 papai = TCPServer.new(addr, port)
 
@@ -31,7 +31,6 @@ def get_mime_type filename
   else
     mime_text = "Application/Octet-Stream"
   end
-  return mime_text
 end
 
 def handle_response_headers filename
@@ -39,13 +38,13 @@ def handle_response_headers filename
   headers << "http/1.1 200 ok"
   headers << "server: midepapai"
   headers << "content-type: #{get_mime_type(filename)};"
-  headers << "content-length: #{File.open("#{root_files}#{filename}", 'r').size}"
+  headers << "content-length: #{File.open(filename, 'r').size}"
   headers << "\r\n"
   return headers.join("\r\n")
 end
 
 def read_file file
-  File.open(file, r) do |file|
+  File.open(file, 'r') do |file|
     until file.eof?
       yield file.read(1024)
     end
@@ -54,14 +53,13 @@ end
 
 loop {
   Thread.start(papai.accept) do |mide|
-    # mide.print "HTTP/1.1 200/OK\r\nContent-type:text/html\r\n\r\n"
     headers = []
     while header = mide.gets and header !~ /^\s*$/
       headers << header.chomp
     end
+    puts headers
     # Pega a primeira linha que não segue o mesmo padrão dos outros
     file_requested = headers.shift.gsub(/GET\ \//, '').gsub(/\ HTTP.*/, '')
-
     handle_request_headers(headers)
     
     filename = file_requested.chomp
@@ -69,17 +67,12 @@ loop {
       filename = "index.html"
     end
     begin
-      # displayfile = File.open("#{root_files}#{filename}", 'r')
+      displayfile = File.open("#{root_files}#{filename}", 'r')
       header_resp = handle_response_headers("#{root_files}#{filename}")
-      puts header_resp
       mide.print header_resp
-      #file_bytes = []
       read_file("#{root_files}#{filename}") do |data|
         mide.print data
       end
-      #displayfile.each_byte{ |b| mide.print b}
-      #content = displayfile.read()
-      #mide.print content
     rescue Errno::ENOENT
       mide.print "File not found"
     end
